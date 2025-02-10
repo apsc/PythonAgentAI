@@ -1,23 +1,34 @@
 from dotenv import load_dotenv
 import os
 import pandas as pd
-from llama_index.query_engine import PandasQueryEngine
+from llama_index.experimental.query_engine import PandasQueryEngine
 from prompts import new_prompt, instruction_str, context
+from llama_index.llms.gemini import Gemini
 from note_engine import note_engine
-from llama_index.tools import QueryEngineTool, ToolMetadata
-from llama_index.agent import ReActAgent
-from llama_index.llms import OpenAI
+from llama_index.core.tools import QueryEngineTool, ToolMetadata
+from llama_index.core.agent import ReActAgent
 from pdf import canada_engine
 
 load_dotenv()
 
+print(os.getenv("GOOGLE_API_KEY"))
+
+
+llm = Gemini(
+    model="models/gemini-pro",
+    api_key=os.getenv("GOOGLE_API_KEY"))
+
+
+
 population_path = os.path.join("data", "population.csv")
 population_df = pd.read_csv(population_path)
 
-population_query_engine = PandasQueryEngine(
-    df=population_df, verbose=True, instruction_str=instruction_str
-)
+# print(population_df.head())
+
+population_query_engine = PandasQueryEngine(df=population_df, verbose=True, instruction_str=instruction_str, llm=llm)
 population_query_engine.update_prompts({"pandas_prompt": new_prompt})
+# population_query_engine.query("What country showed the population decline from last year?")
+
 
 tools = [
     note_engine,
@@ -37,7 +48,6 @@ tools = [
     ),
 ]
 
-llm = OpenAI(model="gpt-3.5-turbo-0613")
 agent = ReActAgent.from_tools(tools, llm=llm, verbose=True, context=context)
 
 while (prompt := input("Enter a prompt (q to quit): ")) != "q":
