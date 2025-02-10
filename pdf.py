@@ -1,57 +1,24 @@
-import os
-from pathlib import Path
-import weaviate
-from weaviate import EmbeddedOptions
-from llama_index.core import VectorStoreIndex, load_index_from_storage
-from llama_index.core.storage import StorageContext
-from llama_index.core.readers import SimpleDirectoryReader
+from llama_index.llms.ollama import Ollama
+from llama_parse import LlamaParse
+from llama_index.core import VectorStoreIndex, SimpleDirectoryReader, PromptTemplate
+from llama_index.core.embeddings import resolve_embed_model
+from dotenv import load_dotenv
+from llama_index.core.tools import QueryEngineTool, ToolMetadata
+from llama_index.core.agent import ReActAgent
 
-client = weaviate.connect_to_local(host="localhost", port=8080, grpc_port=50051, skip_init_checks=True)
-# Check that Weaviate is up and live
-if client.is_live():
-    print("Weaviate is live!")
-else:
-    print("Weaviate is not reachable.")
+load_dotenv()
 
-from weaviate.classes.config import Configure, Property, DataType, VectorDistances
+llm = Ollama(model="deepseek-r1:8b",request_timeout=30)
+# result = llm.complete("Hello World")
+# print(result)
 
-# Define the collection name and properties
+parser = LlamaParse(result_type="markdown")
+file_extractor = {".pdf": parser}
+documents = SimpleDirectoryReader("./data", file_extractor=file_extractor).load_data()
 
-# Define properties with correct field names
-properties = [
-    Property(name="question", data_type=DataType.TEXT),
-    Property(name="answer", data_type=DataType.TEXT),
-    Property(name="round", data_type=DataType.TEXT)
-]
+embed_model = resolve_embed_model("local:BAAI/bge-m3")
+vector_index = VectorStoreIndex.from_documents(documents, embed_model=embed_model)
+canada_engine = vector_index.as_query_engine(llm=llm)
 
-collection_name = "Canada"
-# Create the collection with properly configured vectorizer and vector index
-client.collections.create(
-    name=collection_name,
-    properties=properties,
-    vectorizer_config=Configure.Vectorizer.text2vec_transformers(),
-    vector_index_config=Configure.VectorIndex.hnsw(
-        distance_metric=VectorDistances.COSINE
-    )
-)
-
-
-
-def get_index(data, index_name):
-    index = None
-    if not os.path.exists(index_name):
-        print("building index", index_name)
-        index = VectorStoreIndex.from_documents(data, show_progress=True)
-        index.storage_context.persist(persist_dir=index_name)
-    else:
-        index = load_index_from_storage(
-            StorageContext.from_defaults(persist_dir=index_name)
-        )
-
-    return index
-
-
-pdf_path = os.path.join("data", "Canada.pdf")
-canada_pdf = SimpleDirectoryReader(input_files=[str(pdf_path)]).load_data()
-canada_index = get_index(canada_pdf, "canada")
-canada_engine = canada_index.as_query_engine()
+response = canada_engine.query("What is the capital of Canada?")
+print(response)

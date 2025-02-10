@@ -23,12 +23,8 @@ llm = Gemini(
 population_path = os.path.join("data", "population.csv")
 population_df = pd.read_csv(population_path)
 
-# print(population_df.head())
-
 population_query_engine = PandasQueryEngine(df=population_df, verbose=True, instruction_str=instruction_str, llm=llm)
 population_query_engine.update_prompts({"pandas_prompt": new_prompt})
-# population_query_engine.query("What country showed the population decline from last year?")
-
 
 tools = [
     note_engine,
